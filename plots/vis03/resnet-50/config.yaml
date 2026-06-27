@@ -1,0 +1,40 @@
+# Essential configs
+run_dirs:
+  - runs/vis03d/strat=noprune
+  - runs/vis03d/strat=early
+  - runs/vis03d/strat=lrip
+every_n: 1
+ignore_bn: true
+ignore_bias: true
+plot_size: 10
+plot_extra: 0.5
+plot_colors:
+  strat=noprune: ["Reds", "red", 1.0]
+  strat=early: ["Blues", "blue", 0.5]
+  strat=lrip: ["Greens", "green", 0.5]
+dataset_workers: 10
+
+# GSM configs
+plot_best_of_closest: 5
+plot_metrics:
+  - name: val/loss
+    mode: min
+    log10: true
+  - name: val/top1
+    mode: max
+    log10: false
+
+# VIS configs
+plotly_log10: true
+
+# Hydra configs
+hydra:
+  job:
+    env_set:
+      HYDRA_FULL_ERROR: 1
+  run:
+    dir: ./
+  output_subdir: null
+defaults:
+  - override hydra/hydra_logging: disabled
+  - override hydra/job_logging: stdout

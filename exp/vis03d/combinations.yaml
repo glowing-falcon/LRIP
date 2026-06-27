@@ -1,0 +1,129 @@
+trainer:
+  max_steps: &max_steps 50000
+  val_check_interval: &val_check_interval 1000  # 50 epochs
+  check_val_every_n_epoch: null
+  log_every_n_steps: *val_check_interval
+  max_epochs: -1
+
+callbacks:
+  - type: pl_callback
+    name: LearningRateMonitor
+    params:
+      logging_interval: step
+  - type: !combination
+      name: strat
+      pairs:
+        noprune: OneShotMagnitudePruning
+        early: OneShotMagnitudePruning
+        lrip: LearningRateIntegralPruning
+    params:
+      module_include: &module_include ["nn.modules.Conv2d"]
+      module_ignore: &module_ignore ["conv1"]
+      prune_target: &target !combination
+        name: strat
+        pairs:
+          noprune: 0.0
+          early: 0.9
+          lrip: 0.9
+      monitor_prefix: progress
+      prune_timing: !combination
+        name: strat
+        pairs:
+          noprune: 0.0
+          early: 0.10
+          lrip: !placeholder
+      prune_power: !combination
+        name: strat
+        pairs:
+          noprune: !placeholder
+          early: !placeholder
+          lrip: 3.0
+      prune_cooldown_ratio: !combination
+        name: strat
+        pairs:
+          noprune: !placeholder
+          early: !placeholder
+          lrip: 0.1
+      prune_frequency: !combination
+        name: strat
+        pairs:
+          noprune: !placeholder
+          early: !placeholder
+          lrip: 1
+      rescore: !combination
+        name: strat
+        pairs:
+          noprune: !placeholder
+          early: !placeholder
+          lrip: false
+      layer_norm: true
+  - type: SparsityMonitor
+    params:
+      name: progress/sparsity
+      module_include: *module_include
+      module_ignore: *module_ignore
+  - type: pl_callback
+    name: ModelCheckpoint
+    params:
+      save_top_k: -1
+      filename: "{step:08d}"
+
+task:
+  type: ImageClassification
+  model:
+    type: timm_model_autoclasses
+    params:
+      model_name: resnet50
+      pretrained: false
+      seed: 24601
+    model_input: [3, &dim 224, *dim]
+
+  loss:
+    type: torch_loss
+    params:
+      name: CrossEntropyLoss
+
+  metrics:
+    - {type: TopKAccuracy, name: top1, params: {k: 1}}
+    - {type: TopKAccuracy, name: top5, params: {k: 5}}
+
+  optimizer:
+    type: torch_optimizer
+    params:
+      optimizer_name: AdamW
+      lr: 1.0e-3
+  
+  scheduler:
+    type: CyclicStepLR
+    params:
+      warmup_lr_ratio: 0.01
+      target_lr_ratio: 0.2
+      total_steps: *max_steps
+      warmup_ratio: 0.1
+      cycles: 1
+    config_params:
+      interval: step
+      frequency: 1
+      name: progress/lr
+  
+  cutmix:
+    mixup_alpha: 0.2
+    cutmix_alpha: 0.0
+  cutmix_off_timing: 0.5
+
+dataset:
+  type: ImageFolderImclassV1
+  params:
+    train_root: data/imagenet/train
+    val_root: data/imagenet/val
+
+  transforms:
+    train: &transform
+      - {type: torchvision_transform, name: ToTensor, params: {}}
+      - {type: torchvision_transform, name: Resize, params: {size: [*dim, *dim]}}
+      - {type: torchvision_transform, name: Normalize, params: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}}
+    validation: *transform
+
+  dataloader:
+    batch_size: 128
+    shuffle_seed: 42

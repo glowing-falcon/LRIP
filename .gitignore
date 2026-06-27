@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Ruff cache
+.ruff_cache/
+
+# Virtual environments
+.venv
+
+*runs
+*.log
+
+*configs
+*jobs
+*logs
+*outputs
+*done
+
+data/
+.trash/
+*.bkp

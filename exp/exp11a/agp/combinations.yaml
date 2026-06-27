@@ -1,0 +1,126 @@
+trainer:
+  max_steps: &max_steps 200000
+  val_check_interval: &val_check_interval 1000
+  check_val_every_n_epoch: null
+  log_every_n_steps: *val_check_interval
+  max_epochs: -1
+
+callbacks:
+  - type: pl_callback
+    name: LearningRateMonitor
+    params:
+      logging_interval: step
+  - type: AutomatedGradualPruning
+    params:
+      module_include: &module_include !combination
+        name: model
+        pairs:
+          res50: ["nn.modules.Conv2d"]
+          effb3: ["nn.modules.Conv2d"]
+      module_ignore: &module_ignore !combination
+        name: model
+        pairs:
+          res50: ["conv1"]
+          effb3: ["conv_stem"]
+      prune_target: &target !combination
+        name: spars
+        pairs:
+          "95": 0.95
+          # "90": 0.9
+          "80": 0.8
+          "65": 0.65
+      monitor_prefix: progress
+      prune_power: 3.0
+      prune_warmup_ratio: 0.1
+      prune_cooldown_ratio: 0.1
+      prune_frequency: 1
+      rescore: false
+      layer_norm: true
+  - type: SparsityMonitor
+    params:
+      name: &sparsity_metric progress/sparsity
+      module_include: *module_include
+      module_ignore: *module_ignore
+  - type: PatientCheckpoint
+    params:
+      lookout_param: *sparsity_metric
+      comparison: [__ge__, *target]
+      save_top_k: 1
+      monitor: val/top1
+      mode: max
+      filename: "{step:08d}"
+
+task:
+  type: ImageClassification
+
+  model:
+    type: timm_model_autoclasses
+    params:
+      model_name: !combination
+        name: model
+        pairs:
+          res50: resnet50
+          effb3: efficientnet_b3
+      pretrained: false
+      seed: !combination
+        name: seed
+        pairs:
+          s1: 42
+          s2: 1729
+          s3: 24601
+    model_input: [3, &dim 224, *dim]
+
+  loss:
+    type: torch_loss
+    params:
+      name: CrossEntropyLoss
+
+  metrics:
+    - {type: TopKAccuracy, name: top1, params: {k: 1}}
+    - {type: TopKAccuracy, name: top5, params: {k: 5}}
+
+  optimizer:
+    type: torch_optimizer
+    params:
+      optimizer_name: AdamW
+      lr: 1.0e-3
+  
+  scheduler: 
+    type: CyclicStepLR
+    params:
+      warmup_lr_ratio: 0.01
+      target_lr_ratio: 0.01
+      total_steps: *max_steps
+      warmup_ratio: 0.1
+      cycles: 1
+    config_params:
+      interval: step
+      frequency: 1
+      name: progress/lr
+  
+  cutmix:
+    mixup_alpha: 0.2
+    cutmix_alpha: 0.0
+  cutmix_off_timing: 0.5
+
+dataset:
+  type: ImageFolderImclassV1
+  params:
+    train_root: data/imagenet/train
+    val_root: data/imagenet/val
+
+  transforms:
+    train: &transform
+      - {type: torchvision_transform, name: Resize, params: {size: [*dim, *dim]}}
+      - {type: torchvision_transform, name: ToTensor, params: {}}
+      - {type: torchvision_transform, name: Normalize, params: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}}
+    validation: *transform
+        
+  dataloader:
+    batch_size: 128
+    shuffle_seed: !combination
+      name: seed
+      pairs:
+        s1: 42
+        s2: 1729
+        s3: 24601
