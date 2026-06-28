@@ -6,7 +6,7 @@ This repository contains the code and configurations for experiments conducted i
 
 uv is recommended for environment setup. `uv.lock` file is included in order to reproduce the environment used in the experiments. 
 
-The datasets used in the paper are not included in this repository. Please download the datasets from the following links and place them in the `data/` directory:
+The datasets used in the paper are not included in this repository. Please download them and place them in the `data/` directory:
 
 ```
 .
